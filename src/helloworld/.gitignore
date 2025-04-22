@@ -1,0 +1,13 @@
+# Ignorar binarios compilados
+*.exe
+*.out
+*.test
+
+
+
+# Ignorar archivos temporales de sistema
+.DS_Store
+Thumbs.db
+
+# Ignorar archivos temporales de Go (si llegás a generarlos)
+*.log
