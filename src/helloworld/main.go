@@ -2,22 +2,12 @@ package main
 
 import (
 	"bytes"
-	"context"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
-
-	"github.com/opensearch-project/opensearch-go"
-	"github.com/opensearch-project/opensearch-go/opensearchapi"
 )
-
-type Alarma struct {
-	Name  string `json:"name"`
-	Level string `json:"level"`
-}
 
 func main() {
 
@@ -29,6 +19,12 @@ func main() {
 	logs := getLogs(authToken, url)
 
 	saveToOpenSearch(logs)
+
+	resultados := BuscarAlarmasPorNivel("ERROR")
+	fmt.Println("🔍 Alarmas con nivel ERROR:")
+	for _, a := range resultados {
+		fmt.Printf("🔸 %s - %s\n", a.Name, a.Level)
+	}
 }
 
 func putAlarma(authToken, url, name, level string) {
@@ -95,7 +91,7 @@ func getLogs(authToken, url string) []Alarma {
 	// Deserializar JSON
 	var logs []Alarma
 	//Unmarshal Convierte esos bytes en structs de Go
-	if err := json.Unmarshal(body, &logs); err != nil {
+	if err := json.Unmarshal(body, &logs); err != nil { //guardo en logs, unmarshal body
 		log.Fatalf("Error parseando JSON: %v", err)
 	}
 
@@ -106,63 +102,4 @@ func getLogs(authToken, url string) []Alarma {
 	}
 
 	return logs
-}
-func saveToOpenSearch(logs []Alarma) {
-	// Configurar cliente de OpenSearch (conexión insegura para desarrollo)
-	cfg := opensearch.Config{
-		Addresses: []string{"https://localhost:9200"},
-		Username:  "admin",
-		Password:  "admin",
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true, // Solo para entornos de desarrollo
-			},
-		},
-	}
-
-	// Crear cliente OpenSearch
-	client, err := opensearch.NewClient(cfg)
-	if err != nil {
-		log.Fatalf("Error creando cliente OpenSearch: %v", err)
-	}
-
-	// Verificar conexión
-	info, err := client.Info()
-	if err != nil {
-		log.Fatalf("Error conectando a OpenSearch: %v", err)
-	}
-	defer info.Body.Close()
-	fmt.Println("\n✅ Conexión exitosa a OpenSearch")
-
-	// Nombre del índice donde se guardarán las alarmas
-	indexName := "alarmas"
-
-	// Indexar cada alarma
-	fmt.Println("\n⏳ Subiendo alarmas a OpenSearch...")
-	for _, alarma := range logs {
-		// Convertir a JSON
-		document, _ := json.Marshal(alarma)
-
-		// Configurar petición de indexado
-		req := opensearchapi.IndexRequest{
-			Index: indexName,
-			Body:  bytes.NewReader(document),
-		}
-
-		// Ejecutar petición
-		res, err := req.Do(context.Background(), client)
-		if err != nil {
-			log.Printf("Error indexando documento: %v", err)
-			continue
-		}
-		defer res.Body.Close()
-
-		// Manejar errores de respuesta
-		if res.IsError() {
-			log.Printf("Error en respuesta: %s", res.String())
-		} else {
-			fmt.Printf("📄 Documento indexado: %s\n", alarma.Name)
-		}
-	}
-	fmt.Println("✅ Todas las alarmas han sido guardadas en OpenSearch")
 }
